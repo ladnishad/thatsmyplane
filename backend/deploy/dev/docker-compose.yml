@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  # Backend service for development
+  backend-dev:
+    build:
+      context: ../../
+      dockerfile: deploy/dev/Dockerfile
+    container_name: thatsmyplane-backend-dev
+    ports:
+      - "3001:3000"  # Different port for dev (3001 on host, 3000 in container)
+    volumes:
+      # Mount source code for hot reloading
+      - ../../:/app
+      - /app/node_modules  # Anonymous volume to prevent overwriting node_modules
+      - ../../logs:/app/logs   # Mount logs directory
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-key-change-in-production}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-900000}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100}
+      - FLIGHTAWARE_API_KEY=${FLIGHTAWARE_API_KEY}
+      - FLICKR_API_KEY=${FLICKR_API_KEY}
+      - FLICKR_API_SECRET=${FLICKR_API_SECRET}
+      - FRONTEND_URL=http://localhost:8081
+    depends_on:
+      - redis-dev
+      # Uncomment below if using local Docker MongoDB
+      # - mongodb-dev
+    networks:
+      - thatsmyplane-dev
+    restart: unless-stopped
+    # Development-specific settings
+    stdin_open: true
+    tty: true
+
+  # Redis for session storage (development)
+  redis-dev:
+    image: redis:7-alpine
+    container_name: thatsmyplane-redis-dev
+    ports:
+      - "6380:6379"  # Different port for dev Redis
+    volumes:
+      - redis-dev-data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - thatsmyplane-dev
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf
+
+  # MongoDB service for development (only if using local MongoDB)
+  # Uncomment the entire mongodb-dev service if you want to use local Docker MongoDB
+  # mongodb-dev:
+  #   image: mongo:7-jammy
+  #   container_name: thatsmyplane-mongodb-dev
+  #   ports:
+  #     - "27018:27017"  # Different port for dev MongoDB
+  #   volumes:
+  #     - mongodb-dev-data:/data/db
+  #     - ../../scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+  #   environment:
+  #     - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME:-admin}
+  #     - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-password}
+  #     - MONGO_INITDB_DATABASE=thatsmyplane-dev
+  #   networks:
+  #     - thatsmyplane-dev
+  #   restart: unless-stopped
+
+  # MongoDB Express for development database management (only if using local MongoDB)
+  # Uncomment if you want a database UI for local MongoDB
+  # mongo-express:
+  #   image: mongo-express:latest
+  #   container_name: thatsmyplane-mongo-express-dev
+  #   ports:
+  #     - "8082:8081"
+  #   environment:
+  #     - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_ROOT_USERNAME:-admin}
+  #     - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_ROOT_PASSWORD:-password}
+  #     - ME_CONFIG_MONGODB_URL=mongodb://admin:password@mongodb-dev:27017/
+  #     - ME_CONFIG_BASICAUTH_USERNAME=${MONGO_EXPRESS_USER:-admin}
+  #     - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASS:-password}
+  #   depends_on:
+  #     - mongodb-dev
+  #   networks:
+  #     - thatsmyplane-dev
+  #   restart: unless-stopped
+
+volumes:
+  # Uncomment if using local Docker MongoDB
+  # mongodb-dev-data:
+  #   driver: local
+  redis-dev-data:
+    driver: local
+
+networks:
+  thatsmyplane-dev:
+    driver: bridge

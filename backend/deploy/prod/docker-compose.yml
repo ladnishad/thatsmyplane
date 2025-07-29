@@ -1,0 +1,144 @@
+version: '3.8'
+
+services:
+  # Backend service for production
+  backend-prod:
+    build:
+      context: ../../
+      dockerfile: deploy/prod/Dockerfile
+    container_name: thatsmyplane-backend-prod
+    ports:
+      - "3000:3000"  # Production port
+    volumes:
+      - ../../logs:/app/logs:rw  # Mount logs directory
+      - /app/node_modules    # Anonymous volume for node_modules
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MONGODB_URI=${MONGODB_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-1d}
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-900000}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-50}
+      - FLIGHTAWARE_API_KEY=${FLIGHTAWARE_API_KEY}
+      - FLICKR_API_KEY=${FLICKR_API_KEY}
+      - FLICKR_API_SECRET=${FLICKR_API_SECRET}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - REDIS_URL=redis://redis-prod:6379
+    depends_on:
+      - redis-prod
+      # Uncomment below if using local Docker MongoDB
+      # - mongodb-prod
+    networks:
+      - thatsmyplane-prod
+    restart: unless-stopped
+    # Production optimizations
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    # Security settings
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+      - /app/logs:noexec,nosuid,size=50m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+
+  # Redis for session storage (production)
+  redis-prod:
+    image: redis:7-alpine
+    container_name: thatsmyplane-redis-prod
+    ports:
+      - "6379:6379"  # Production Redis port
+    volumes:
+      - redis-prod-data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - thatsmyplane-prod
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+
+  # Nginx reverse proxy for production
+  nginx:
+    image: nginx:alpine
+    container_name: thatsmyplane-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/ssl:/etc/nginx/ssl:ro
+      - ../../logs/nginx:/var/log/nginx
+    depends_on:
+      - backend-prod
+    networks:
+      - thatsmyplane-prod
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+
+  # MongoDB service for production (only if using local MongoDB)
+  # Uncomment the entire mongodb-prod service if you want to use local Docker MongoDB
+  # mongodb-prod:
+  #   image: mongo:7-jammy
+  #   container_name: thatsmyplane-mongodb-prod
+  #   ports:
+  #     - "27017:27017"  # Production MongoDB port
+  #   volumes:
+  #     - mongodb-prod-data:/data/db
+  #     - mongodb-prod-config:/data/configdb
+  #     - ../../scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+  #   environment:
+  #     - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
+  #     - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+  #     - MONGO_INITDB_DATABASE=thatsmyplane-prod
+  #   networks:
+  #     - thatsmyplane-prod
+  #   restart: unless-stopped
+  #   # Production MongoDB settings
+  #   command: mongod --auth --bind_ip_all --quiet
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 1G
+  #         cpus: '1.0'
+  #       reservations:
+  #         memory: 512M
+  #         cpus: '0.5'
+
+volumes:
+  # Uncomment if using local Docker MongoDB
+  # mongodb-prod-data:
+  #   driver: local
+  # mongodb-prod-config:
+  #   driver: local
+  redis-prod-data:
+    driver: local
+
+networks:
+  thatsmyplane-prod:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
