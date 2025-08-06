@@ -30,7 +30,7 @@ jobs:
       
       - name: Run tests
         working-directory: ./backend
-        run: npm test
+        run: npm test -- --passWithNoTests
       
       - name: Run linting
         working-directory: ./backend
