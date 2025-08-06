@@ -157,7 +157,7 @@ jobs:
               exit 1
             fi
             
-            echo "✅ Deployment completed successfully!"
+            echo "✅ Development deployment completed successfully!"
 
   notify:
     needs: [deploy]
