@@ -114,7 +114,7 @@ jobs:
           timeout: 60s
           debug: true
           script: |
-            echo "🚀 Starting deployment..."
+            echo "🚀 Starting deployment to development environment..."
             
             # Login to GitHub Container Registry
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
