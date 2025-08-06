@@ -20,6 +20,9 @@ RUN npm ci && npm cache clean --force
 # Install nodemon globally for development
 RUN npm install -g nodemon
 
+# Copy application source code
+COPY src/ ./src/
+
 # Create logs directory
 RUN mkdir -p logs
 
