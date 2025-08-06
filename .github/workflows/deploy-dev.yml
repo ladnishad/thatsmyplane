@@ -3,7 +3,7 @@ name: Deploy to Development
 on:
   push:
     branches: [ development ]
-    paths: [ 'backend/**' ]
+    paths: [ 'backend/**', '.github/workflows/**' ]
   workflow_dispatch:
 
 env:
