@@ -3,29 +3,25 @@ version: '3.8'
 services:
   # Backend service for development
   backend-dev:
-    build:
-      context: ../../
-      dockerfile: deploy/dev/Dockerfile
+    image: ghcr.io/ladnishad/thatsmyplane-backend:${IMAGE_TAG:-development}
     container_name: thatsmyplane-backend-dev
     ports:
       - "3001:3000"  # Different port for dev (3001 on host, 3000 in container)
     volumes:
-      # Mount source code for hot reloading
-      - ../../:/app
-      - /app/node_modules  # Anonymous volume to prevent overwriting node_modules
-      - ../../logs:/app/logs   # Mount logs directory
+      # Mount logs directory only (no source code mounting for production images)
+      - ./logs:/app/logs
     environment:
       - NODE_ENV=development
       - PORT=3000
       - MONGODB_URI=${MONGODB_URI}
-      - JWT_SECRET=${JWT_SECRET:-dev-secret-key-change-in-production}
+      - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-900000}
       - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100}
       - FLIGHTAWARE_API_KEY=${FLIGHTAWARE_API_KEY}
       - FLICKR_API_KEY=${FLICKR_API_KEY}
       - FLICKR_API_SECRET=${FLICKR_API_SECRET}
-      - FRONTEND_URL=http://localhost:8081
+      - FRONTEND_URL=${FRONTEND_URL}
     depends_on:
       - redis-dev
       # Uncomment below if using local Docker MongoDB
@@ -33,9 +29,6 @@ services:
     networks:
       - thatsmyplane-dev
     restart: unless-stopped
-    # Development-specific settings
-    stdin_open: true
-    tty: true
 
   # Redis for session storage (development)
   redis-dev:

@@ -1,0 +1,169 @@
+name: Deploy to Development
+
+on:
+  push:
+    branches: [ development ]
+    paths: [ 'backend/**' ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ladnishad/thatsmyplane-backend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: ./backend
+        run: npm ci
+      
+      - name: Run tests
+        working-directory: ./backend
+        run: npm test
+      
+      - name: Run linting
+        working-directory: ./backend
+        run: npm run lint
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run security audit
+        working-directory: ./backend
+        run: npm audit --audit-level high
+        continue-on-error: true
+      
+      - name: Scan for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+
+  build-and-push:
+    needs: [test, security]
+    runs-on: ubuntu-latest
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/deploy/dev/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - name: Deploy to DigitalOcean
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USERNAME }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          port: ${{ secrets.DO_SSH_PORT }}
+          script: |
+            echo "🚀 Starting deployment..."
+            
+            # Login to GitHub Container Registry
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Navigate to deployment directory
+            cd /home/deploy/thatsmyplane-dev
+            
+            # Set image tag and pull latest
+            export IMAGE_TAG=development
+            docker-compose pull
+            
+            # Stop existing containers
+            docker-compose down --remove-orphans
+            
+            # Start services with new images
+            docker-compose up -d
+            
+            # Clean up old images
+            docker image prune -f
+            
+            # Health check with retries
+            echo "⏳ Waiting for services to be ready..."
+            sleep 15
+            max_attempts=30
+            attempt=1
+            while [ $attempt -le $max_attempts ]; do
+              if curl -f http://localhost:3001/health > /dev/null 2>&1; then
+                echo "✅ Backend is healthy!"
+                break
+              else
+                echo "⏳ Waiting for backend... (attempt $attempt/$max_attempts)"
+                sleep 5
+                ((attempt++))
+              fi
+            done
+            
+            if [ $attempt -gt $max_attempts ]; then
+              echo "❌ Health check failed!"
+              docker-compose logs backend-dev
+              exit 1
+            fi
+            
+            echo "✅ Deployment completed successfully!"
+
+  notify:
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Deployment Status
+        run: |
+          if [ "${{ needs.deploy.result }}" == "success" ]; then
+            echo "🎉 Deployment to development environment successful!"
+            echo "🌐 Application: https://dev-api.thatsmyplane.com/health"
+          else
+            echo "❌ Deployment failed!"
+            exit 1
+          fi

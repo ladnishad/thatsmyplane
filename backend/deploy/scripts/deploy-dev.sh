@@ -23,6 +23,10 @@ if [ ! -f ".env" ]; then
     echo "🔧 You can start with the provided development defaults"
 fi
 
+# Load environment variables
+echo "🔑 Loading environment variables..."
+source .env 2>/dev/null || true
+
 echo "📦 Building and starting development containers..."
 
 # Stop existing containers
@@ -65,15 +69,15 @@ echo ""
 echo "🎉 Development environment is ready!"
 echo ""
 echo "📋 Service URLs:"
-echo "   Backend:       http://localhost:3001"
-echo "   Health Check:  http://localhost:3001/health"
-echo "   MongoDB:       localhost:27018"
-echo "   Redis:         localhost:6380"
-echo "   Mongo Express: http://localhost:8082"
+echo "   Backend:       http://${SERVER_IP:-localhost}:3001"
+echo "   Health Check:  http://${SERVER_IP:-localhost}:3001/health" 
+echo "   MongoDB:       ${SERVER_IP:-localhost}:27018"
+echo "   Redis:         ${SERVER_IP:-localhost}:6380"
+echo "   Mongo Express: http://${SERVER_IP:-localhost}:8082"
 echo ""
 echo "📝 Useful commands:"
 echo "   View logs:     docker-compose logs -f"
 echo "   Stop services: docker-compose down"
 echo "   Restart:       docker-compose restart"
 echo ""
-echo "💡 Update your mobile app API URL to: http://YOUR_IP:3001/api"
+echo "💡 Update your mobile app API URL to: http://${SERVER_IP:-localhost}:3001/api"
