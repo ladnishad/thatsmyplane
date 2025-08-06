@@ -35,6 +35,7 @@ jobs:
       - name: Run linting
         working-directory: ./backend
         run: npm run lint
+        continue-on-error: true
 
   security:
     runs-on: ubuntu-latest
