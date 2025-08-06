@@ -11,7 +11,7 @@ RUN addgroup -g 1001 -S nodejs && \
 # Set working directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files (from the backend directory which is the build context)
 COPY package*.json ./
 
 # Install all dependencies (including dev dependencies)

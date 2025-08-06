@@ -124,7 +124,7 @@ dist/
 build/
 
 # Package manager files
-package-lock.json
+# package-lock.json  # Keep this for npm ci
 yarn.lock
 
 # Editor files
